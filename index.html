@@ -910,6 +910,9 @@ function attachDeleteHandler(btn, onConfirm){
 
 function attachDragHandlers(row, onReorder){
   const handle = row.querySelector('.drag-handle');
+  row.addEventListener('dragstart', (e)=>{
+    if(!handle.contains(e.target)) e.preventDefault();
+  });
   handle.addEventListener('dragstart', ()=>{
     draggedRow = row;
     row.classList.add('dragging');
