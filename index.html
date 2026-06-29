@@ -134,6 +134,8 @@
   }
   .initials-row input{
     flex:1;
+    min-width:0;
+    width:100%;
     background:var(--panel-2);
     border:1px solid var(--border);
     color:var(--text);
@@ -427,7 +429,7 @@
   }
   .reminder-row.done{ opacity:0.55; }
   .reminder-row.done .reminder-task, .reminder-row.done .reminder-site{ text-decoration:line-through; color:var(--muted); }
-  .reminder-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .reminder-main{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
   .reminder-site{ font-weight:700; font-size:0.85rem; color:var(--text); }
   .reminder-task{ font-size:0.82rem; color:var(--text); }
   .reminder-actions{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
@@ -906,7 +908,7 @@ function attachDeleteHandler(btn, onConfirm){
   });
 }
 
-function attachDragHandlers(row){
+function attachDragHandlers(row, onReorder){
   row.addEventListener('dragstart', ()=>{
     draggedRow = row;
     row.classList.add('dragging');
@@ -937,7 +939,7 @@ function attachDragHandlers(row){
     const parent = row.parentElement;
     if(before) parent.insertBefore(draggedRow, row);
     else parent.insertBefore(draggedRow, row.nextSibling);
-    persistAddonOrder();
+    if(onReorder) onReorder();
   });
 }
 
@@ -1008,7 +1010,7 @@ function renderAddons(){
       renderAddons();
       renderOutput();
     });
-    attachDragHandlers(row);
+    attachDragHandlers(row, persistAddonOrder);
     addonsTickListEl.appendChild(row);
   });
 
@@ -1048,7 +1050,7 @@ function renderAddons(){
       renderAddons();
       renderOutput();
     });
-    attachDragHandlers(row);
+    attachDragHandlers(row, persistAddonOrder);
     addonsFillListEl.appendChild(row);
   });
 }
@@ -1460,6 +1462,18 @@ function hexToRgba(hex, alpha){
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+function persistReminderOrder(){
+  const ids = Array.from(remindersListEl.querySelectorAll('[data-rem-id]')).map(el=> el.dataset.remId);
+  const byId = {};
+  reminders.forEach(r=> byId[r.id] = r);
+  const newOrder = [];
+  ids.forEach(id=>{ if(byId[id]){ newOrder.push(byId[id]); delete byId[id]; } });
+  Object.keys(byId).forEach(id=> newOrder.push(byId[id])); // safety net, shouldn't trigger
+  reminders = newOrder;
+  saveReminders();
+  renderReminders();
+}
+
 let reminders = loadReminders();
 let selectedSwatch = SWATCHES[0].hex;
 let clearArmed = false;
@@ -1485,6 +1499,7 @@ SWATCHES.forEach((sw, i)=>{
   b.type = 'button';
   b.className = 'swatch' + (i===0 ? ' selected' : '');
   b.style.background = sw.hex;
+  b.dataset.hex = sw.hex;
   b.title = sw.name;
   b.addEventListener('click', (e)=>{
     e.stopPropagation();
@@ -1525,15 +1540,19 @@ function renderReminders(){
   reminders.forEach(rem=>{
     const row = document.createElement('div');
     row.className = 'reminder-row' + (rem.done ? ' done' : '');
+    row.draggable = true;
+    row.dataset.remId = rem.id;
     row.style.borderLeftColor = rem.done ? 'var(--border)' : rem.color;
     row.style.background = rem.done ? 'transparent' : hexToRgba(rem.color, 0.10);
     row.innerHTML = `
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
       <div class="reminder-main">
         <span class="reminder-site">${rem.site || '(no site name)'}</span>
         <span class="reminder-task">${rem.task}</span>
       </div>
       <div class="reminder-actions">
         <label class="done-toggle"><input type="checkbox" ${rem.done?'checked':''}> Done</label>
+        <button class="edit-btn" type="button" title="Edit this reminder">✏️</button>
         <button class="del-btn" type="button" title="Delete this line">×</button>
       </div>`;
     const doneCb = row.querySelector('input[type="checkbox"]');
@@ -1542,11 +1561,16 @@ function renderReminders(){
       saveReminders();
       renderReminders();
     });
+    row.querySelector('.edit-btn').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditReminderForm(rem);
+    });
     attachDeleteHandler(row.querySelector('.del-btn'), ()=>{
       reminders = reminders.filter(r=> r.id !== rem.id);
       saveReminders();
       renderReminders();
     });
+    attachDragHandlers(row, persistReminderOrder);
     remindersListEl.appendChild(row);
   });
 }
@@ -1573,27 +1597,60 @@ clearCompletedBtn.addEventListener('click', (e)=>{
   renderReminders();
 });
 
+let editingReminderId = null;
+const saveReminderBtn = document.getElementById('saveReminderBtn');
+
+function openEditReminderForm(rem){
+  editingReminderId = rem.id;
+  reminderSiteInput.value = rem.site || '';
+  reminderTaskInput.value = rem.task;
+  selectedSwatch = rem.color;
+  reminderSwatchesEl.querySelectorAll('.swatch').forEach(s=>
+    s.classList.toggle('selected', s.dataset.hex === rem.color));
+  saveReminderBtn.textContent = 'Save changes';
+  reminderAddForm.style.display = 'flex';
+  reminderTaskInput.focus();
+}
+
 addReminderTriggerBtn.addEventListener('click', ()=>{
+  editingReminderId = null;
   reminderSiteInput.value = '';
   reminderTaskInput.value = '';
   selectedSwatch = SWATCHES[0].hex;
   reminderSwatchesEl.querySelectorAll('.swatch').forEach((s,i)=> s.classList.toggle('selected', i===0));
+  saveReminderBtn.textContent = 'Add reminder';
   reminderAddForm.style.display = 'flex';
   reminderTaskInput.focus();
 });
 document.getElementById('cancelReminderBtn').addEventListener('click', ()=>{
   reminderAddForm.style.display = 'none';
+  editingReminderId = null;
+  saveReminderBtn.textContent = 'Add reminder';
 });
-document.getElementById('saveReminderBtn').addEventListener('click', ()=>{
+saveReminderBtn.addEventListener('click', ()=>{
   const task = reminderTaskInput.value.trim();
   if(!task){ reminderTaskInput.focus(); return; }
-  reminders.push({
-    id: 'rem_'+Date.now(),
-    site: reminderSiteInput.value.trim(),
-    task,
-    color: selectedSwatch,
-    done: false
-  });
+
+  if(editingReminderId){
+    const idx = reminders.findIndex(r=> r.id === editingReminderId);
+    if(idx !== -1){
+      reminders[idx] = Object.assign({}, reminders[idx], {
+        site: reminderSiteInput.value.trim(),
+        task,
+        color: selectedSwatch
+      });
+    }
+    editingReminderId = null;
+  } else {
+    reminders.push({
+      id: 'rem_'+Date.now(),
+      site: reminderSiteInput.value.trim(),
+      task,
+      color: selectedSwatch,
+      done: false
+    });
+  }
+  saveReminderBtn.textContent = 'Add reminder';
   saveReminders();
   reminderAddForm.style.display = 'none';
   renderReminders();
