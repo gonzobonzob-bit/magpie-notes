@@ -909,11 +909,12 @@ function attachDeleteHandler(btn, onConfirm){
 }
 
 function attachDragHandlers(row, onReorder){
-  row.addEventListener('dragstart', ()=>{
+  const handle = row.querySelector('.drag-handle');
+  handle.addEventListener('dragstart', ()=>{
     draggedRow = row;
     row.classList.add('dragging');
   });
-  row.addEventListener('dragend', ()=>{
+  handle.addEventListener('dragend', ()=>{
     row.classList.remove('dragging');
     draggedRow = null;
     document.querySelectorAll('.drag-over-top,.drag-over-bottom').forEach(el=>
@@ -980,11 +981,10 @@ function renderAddons(){
   tickDefs.forEach(def=>{
     const row = document.createElement('div');
     row.className = 'check-item';
-    row.draggable = true;
     row.dataset.defId = def.id;
     const checked = !!state.customValues[def.id];
     if(checked) row.classList.add('ticked');
-    row.innerHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>
+    row.innerHTML = `<span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
       <span class="item-label">${def.label}</span>
       <div class="addon-actions">
         <input type="checkbox" ${checked?'checked':''}>
@@ -1017,14 +1017,13 @@ function renderAddons(){
   fillDefs.forEach(def=>{
     const row = document.createElement('div');
     row.className = 'template-row';
-    row.draggable = true;
     row.dataset.defId = def.id;
     const val = state.customValues[def.id] || '';
     if(val) row.classList.add('filled');
     const opts = ['<option value="">— Select —</option>'];
     def.options.forEach(o=> opts.push(`<option value="${o.replace(/"/g,'&quot;')}" ${o===val?'selected':''}>${o}</option>`));
     opts.push(`<option value="x" ${val==='x'?'selected':''}>x — General selection</option>`);
-    row.innerHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>
+    row.innerHTML = `<span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
       <div class="tmpl-label">${def.label.replace(/\{[^}]+\}/, m=>'<em>'+m+'</em>')}</div>
       <div class="addon-actions">
         <select>${opts.join('')}</select>
@@ -1540,12 +1539,11 @@ function renderReminders(){
   reminders.forEach(rem=>{
     const row = document.createElement('div');
     row.className = 'reminder-row' + (rem.done ? ' done' : '');
-    row.draggable = true;
     row.dataset.remId = rem.id;
     row.style.borderLeftColor = rem.done ? 'var(--border)' : rem.color;
     row.style.background = rem.done ? 'transparent' : hexToRgba(rem.color, 0.10);
     row.innerHTML = `
-      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <span class="drag-handle" draggable="true" title="Drag to reorder">⠿</span>
       <div class="reminder-main">
         <span class="reminder-site">${rem.site || '(no site name)'}</span>
         <span class="reminder-task">${rem.task}</span>
